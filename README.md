@@ -11,6 +11,8 @@ The GOAL?
 
 To make sure assignments really show how skilled someone is in tech, not just how good their search, copy, and paste skills are 🚫📑.
 
+It can handle all sorts of changes in the code, and is also variable-name invariant. If there's an X% change, it will be able to tell you that there's a (100-X)% similarity.
+
 ## Backstory
 
 Someone submitted an assignment that looked too well-done for the amount of time given. 
