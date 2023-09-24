@@ -29,6 +29,18 @@ func isNonCodeDirectory(dir string) bool {
 	return false
 }
 
+var JS_OR_TS = []string{".js", ".ts"}
+
+func IsExtensionSame(path1 string, path2 string) bool {
+	ext1 := filepath.Ext(path1)
+	ext2 := filepath.Ext(path2)
+
+	if Contains(JS_OR_TS, ext1) {
+		return Contains(JS_OR_TS, ext2)
+	}
+	return ext1 == ext2
+}
+
 // GetFilePaths walks through the directory and returns an array of all file paths
 func GetFilePaths(dir string) ([]string, error) {
 	var filePaths []string

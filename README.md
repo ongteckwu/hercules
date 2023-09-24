@@ -15,11 +15,17 @@ It can handle all sorts of changes in the code, and is also variable-name invari
 
 ## Backstory
 
-Someone submitted an assignment that looked too well-done for the amount of time given. 
+I built this tool out of annoyance.
 
-My suspicion made me CSI into Github, and that led me to finding the repositories he cloned. 
+Someone submitted an assignment that looked too well-done for the amount of time given.
 
-Not wanting to have to do this manual work again, I decided to just build a tool to automate the process 🤓.
+My suspicion made me CSI into Github.
+
+Unfortunately for him, it led me to finding the repositories he cloned.
+
+I was annoyed that he cloned a repository for my technical assignment, and vowed to not let this happen to me again.
+
+I decided to build a tool to automate this process, for my own sake, and hopefully for other hiring managers out there.
 
 ## Sample Output
 ![download](https://github.com/ongteckwu/hercules/assets/3834724/b464b537-8c85-4f91-9b6c-ebfe3b020d37)

@@ -22,7 +22,7 @@ import (
 )
 
 const TEXT_MAX_LENGTH = 25000
-const NO_OF_FILES_FOR_PARSING = 20
+const NO_OF_FILES_FOR_PARSING = 18
 
 type RepoToRepoPotentialChallengeeData struct {
 	path            string
@@ -269,6 +269,9 @@ func cloneAndCompare(challengeeRepoName string, allDataArray []string, allDataMa
 		w1 := combinedCharLevelTFIDF.Cal(data)
 		var challengeeArray []RepoToRepoPotentialChallengeeData
 		for challengeePath, challengeeData := range challengeeAllDataMap {
+			if !util.IsExtensionSame(path, challengeePath) {
+				continue
+			}
 			w2, ok := tempMemory[challengeePath]
 			if !ok {
 				w2 = combinedCharLevelTFIDF.Cal(challengeeData)
