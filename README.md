@@ -1,12 +1,11 @@
 # Hercules
-![simone-pellegrini-L3QG_OBluT0-unsplash (1)](https://github.com/ongteckwu/hercules/assets/3834724/08978007-8d9b-4fae-87cd-179fb15fcd38)
+<p align="center">
+  <img src="https://github.com/ongteckwu/hercules/assets/3834724/d12eca5b-ffff-4875-af66-e277be3a3124" />
+</p>
 
+**Hercules is a tool for hiring managers.**
 
-
-## Overview
-Hercules is a tool for hiring managers 🕵️‍♀️.
-
-It checks if job applicants have copied their tech assignments from GitHub 📋➡️🖥️.
+It checks if job applicants have copied their tech assignments from GitHub.
 
 The GOAL? 
 
@@ -14,7 +13,11 @@ To make sure assignments really show how skilled someone is in tech, not just ho
 
 ## Backstory
 
-Someone submitted an assignment that looked too well-done for the amount of time given. My suspicion made me CSI into Github, and that led me to finding the repositories he cloned. Not wanting to have to do this manual work again, I decided to just build a tool to automate the process 🤓.
+Someone submitted an assignment that looked too well-done for the amount of time given. 
+
+My suspicion made me CSI into Github, and that led me to finding the repositories he cloned. 
+
+Not wanting to have to do this manual work again, I decided to just build a tool to automate the process 🤓.
 
 ## Sample Output
 ![download](https://github.com/ongteckwu/hercules/assets/3834724/b464b537-8c85-4f91-9b6c-ebfe3b020d37)
