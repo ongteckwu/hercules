@@ -18,7 +18,7 @@ type ParsedCodeTextObject struct {
 	SortedKeys     []int
 }
 
-func ParseCodeText(text string) ParsedCodeTextObject {
+func ParseCodeText(text string) *ParsedCodeTextObject {
 	var parsedText strings.Builder // Efficient way to build strings
 	var lineMeta []LineMetaObject
 	var sortedKeys []int
@@ -75,10 +75,10 @@ func ParseCodeText(text string) ParsedCodeTextObject {
 		LineMeta:       lineMeta,
 		SortedKeys:     sortedKeys,
 	}
-	return parsedCodeTextObject
+	return &parsedCodeTextObject
 }
 
-func (parsedCodeTextObject ParsedCodeTextObject) FindLineStart(index int) (int, int, error) {
+func (parsedCodeTextObject *ParsedCodeTextObject) FindLineStart(index int) (int, int, error) {
 	// Find the line that contains index
 	sortedKeys := parsedCodeTextObject.SortedKeys
 	lineIndex := sort.Search(len(sortedKeys), func(i int) bool { return sortedKeys[i] > index })
@@ -90,7 +90,7 @@ func (parsedCodeTextObject ParsedCodeTextObject) FindLineStart(index int) (int, 
 	return lineIndex, sortedKeys[lineIndex-1], nil
 }
 
-func (parsedCodeTextObject ParsedCodeTextObject) FindOriginalIndex(parsedIndex int) int {
+func (parsedCodeTextObject *ParsedCodeTextObject) FindOriginalIndex(parsedIndex int) int {
 	// Converts the parsedIndex to the original index
 	sortedKeys := parsedCodeTextObject.SortedKeys
 	lineMeta := parsedCodeTextObject.LineMeta

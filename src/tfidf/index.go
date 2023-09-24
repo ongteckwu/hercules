@@ -83,12 +83,12 @@ func (f *TFIDF) AddStopWordsFile(file string) (err error) {
 type tokenizerDef func(string) []string
 
 // AddDocs add train documents
-func (f *TFIDF) AddDocs(docs []string, tokenizerArgs ...tokenizerDef) {
+func (f *TFIDF) AddDocs(docs *[]string, tokenizerArgs ...tokenizerDef) {
 	tokenizer := f.tokenizer.Seg
 	if len(tokenizerArgs) > 0 {
 		tokenizer = tokenizerArgs[0]
 	}
-	for _, doc := range docs {
+	for _, doc := range *docs {
 		h := hash(doc)
 		if f.docHashPos(h) >= 0 {
 			return

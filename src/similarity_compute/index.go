@@ -16,10 +16,8 @@ type SimilarityResults struct {
 	Text2SubstringIndexes SubstringIndexesObject
 }
 
-func ComputeLevenSimilarity(codeText1 string, codeText2 string) SimilarityResults {
-	parsedCodeTextObject1 := code_parser.ParseCodeText(codeText1)
-	parsedCodeTextObject2 := code_parser.ParseCodeText(codeText2)
-
+func ComputeLevenSimilarity(parsedCodeTextObject1 *code_parser.ParsedCodeTextObject,
+	parsedCodeTextObject2 *code_parser.ParsedCodeTextObject) *SimilarityResults {
 	parsedText1 := parsedCodeTextObject1.ParsedCodeText
 	parsedText2 := parsedCodeTextObject2.ParsedCodeText
 
@@ -49,5 +47,5 @@ func ComputeLevenSimilarity(codeText1 string, codeText2 string) SimilarityResult
 		Text1SubstringIndexes: text1SubstringIndexes,
 		Text2SubstringIndexes: text2SubstringIndexes,
 	}
-	return similarityResults
+	return &similarityResults
 }
