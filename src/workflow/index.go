@@ -172,7 +172,7 @@ func renderTable(repoName string, highlyLikelyRepos []RepoToRepoHighestLikelihoo
 	fmt.Println("-----------------------------------")
 	fmt.Println("Repository to compare: " + repoName)
 	fmt.Printf("Top %d Repositories\n", len(highlyLikelyRepos))
-	fmt.Println("If any of the values are green, then the repo to compare is likely a copy of the repo in question.")
+	fmt.Println("If any of the values are green, then the challenged repo is likely a copy of the repo in question.")
 
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Repo URL", "TFIDF Weighted", "Argmin Leven Weighted", "Combined Sim Weighted"})
