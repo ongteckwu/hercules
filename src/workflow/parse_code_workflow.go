@@ -15,10 +15,11 @@ import (
 )
 
 type MiniParseCodeWorkflowScanResult struct {
-	repositoryName     string
-	tfidfSimilarity    float64
-	levenSimilarity    float64
-	combinedSimilarity float64
+	RepositoryName      string
+	NumberOfLinesCopied int
+	TFIDFSimilarity     float64
+	LevenSimilarity     float64
+	CombinedSimilarity  float64
 }
 
 const NUMBER_OF_FILES_TO_QUERY = 10
@@ -32,7 +33,7 @@ func ParseCodeWorkflow(
 	keywordsTFIDFMutex *sync.Mutex,
 	charLevelTFIDF *tfidf.TFIDF,
 	charLevelTFIDFMutex *sync.Mutex,
-	possibleRepoMap map[string]int,
+	possibleRepoMap map[string][]*MiniParseCodeWorkflowScanResult,
 	possibleRepoMapMutex *sync.Mutex,
 ) error {
 	fileExt := filepath.Ext(path)
@@ -99,10 +100,11 @@ func ParseCodeWorkflow(
 			tfidfSimilarity := similarity.Cosine(w1, w2)
 
 			result := MiniParseCodeWorkflowScanResult{
-				repositoryName:     item.Repository.FullName,
-				tfidfSimilarity:    tfidfSimilarity,
-				levenSimilarity:    similarityResults.Percentage,
-				combinedSimilarity: similarityResults.Percentage * tfidfSimilarity,
+				RepositoryName:      item.Repository.FullName,
+				NumberOfLinesCopied: similarityResults.Text1SubstringIndexes.EndIndex - similarityResults.Text1SubstringIndexes.StartIndex,
+				TFIDFSimilarity:     tfidfSimilarity,
+				LevenSimilarity:     similarityResults.Percentage,
+				CombinedSimilarity:  similarityResults.Percentage * tfidfSimilarity,
 			}
 
 			resultChannel <- &result
@@ -119,11 +121,11 @@ func ParseCodeWorkflow(
 	// and increase the count of the repo name
 	count := 0
 	for result := range resultChannel {
-		if result.combinedSimilarity > COMBINED_SIMILARITY_THRESHOLD ||
-			result.tfidfSimilarity > TFIDF_SIMILARITY_THRESHOLD ||
-			result.levenSimilarity > LEVEN_SIMILARITY_THRESHOLD {
+		if result.CombinedSimilarity > COMBINED_SIMILARITY_THRESHOLD ||
+			result.TFIDFSimilarity > TFIDF_SIMILARITY_THRESHOLD ||
+			result.LevenSimilarity > LEVEN_SIMILARITY_THRESHOLD {
 			possibleRepoMapMutex.Lock()
-			possibleRepoMap[result.repositoryName]++
+			possibleRepoMap[result.RepositoryName] = append(possibleRepoMap[result.RepositoryName], result)
 			possibleRepoMapMutex.Unlock()
 			count++
 		}

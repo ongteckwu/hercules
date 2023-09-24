@@ -26,6 +26,7 @@ func Cleanup(dir string) {
 	if err != nil {
 		log.Printf("Error while cleaning up: %v", err)
 	}
+	fmt.Printf("Cleaned up temp directory %s\n", dir)
 }
 
 func Reverse(s string) string {

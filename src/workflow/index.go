@@ -80,7 +80,7 @@ func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 	randomlyDrawnFilesN := util.RandomDrawWithoutReplacement(&filePaths, NO_OF_FILES_FOR_PARSING)
 
 	// for each file, parse
-	possibleRepoMap := make(map[string]int)
+	possibleRepoMap := make(map[string][]*MiniParseCodeWorkflowScanResult)
 	possibleRepoMapMutex := &sync.Mutex{}
 
 	///////////////////////////////
@@ -129,44 +129,85 @@ func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 
 	possibleReposTopN := getTopNRepos(possibleRepoMap, CHOOSE_TOP_N_REPOS)
 
-	var highlyLikelyRepos []RepoToRepoHighestLikelihoodScores
-
-	if len(possibleReposTopN) > 0 {
-		repoEvaluationProgressBar := ProgressModel{
-			progress:    progress.New(progress.WithDefaultGradient()),
-			mainMessage: fmt.Sprintf("Evaluating %d Repositories Found (Max 8)...", len(possibleReposTopN)),
-			length:      len(possibleReposTopN),
-		}
-
-		repoEvaluationProgressBarModel := tea.NewProgram(repoEvaluationProgressBar)
-
-		go func() {
-			// for each repo, clone and compare
-			// dont go routine each due to memory usage
-			countOfDone := 0
-			for _, challengeeRepoName := range possibleReposTopN {
-				repoEvaluationProgressBarModel.Send(updateMessageMsg{message: fmt.Sprintf("Evaluating repo number %d...", countOfDone)})
-				result := cloneAndCompare(challengeeRepoName, allDataArray, allDataMap)
-				if result != nil {
-					highlyLikelyRepos = append(highlyLikelyRepos, *result)
-				}
-				countOfDone++
-				repoEvaluationProgressBarModel.Send(progressMsg{workflowsDone: countOfDone})
-			}
-		}()
-
-		// awaits here
-		if _, err := repoEvaluationProgressBarModel.Run(); err != nil {
-			fmt.Println("Error running progress bar for parsing code:", err)
-			os.Exit(1)
-		}
-
-		// sort by combined similarity, descending order
-		sort.Slice(highlyLikelyRepos, func(i, j int) bool {
-			return highlyLikelyRepos[i].CombinedSimilarityWeighted > highlyLikelyRepos[j].CombinedSimilarityWeighted
-		})
+	if len(possibleReposTopN) == 0 {
+		fmt.Println("No repositories found, hence no plagiarism detected!")
+		os.Exit(0)
 	}
 
+	possibleReposTopNMap := make(map[string][]*MiniParseCodeWorkflowScanResult)
+	for _, repoName := range possibleReposTopN {
+		possibleReposTopNMap[repoName] = possibleRepoMap[repoName]
+	}
+	possibleRepoMap = nil // free memory
+
+	var preliminaryHighlyLikelyRepos []RepoToRepoHighestLikelihoodScores
+
+	for challengeeRepoName, challengeeRepoData := range possibleReposTopNMap {
+		totalNumberOfLinesCopied := 0
+		for _, data := range challengeeRepoData {
+			totalNumberOfLinesCopied += data.NumberOfLinesCopied
+		}
+		result := computePreliminarySimilarityScoresWeighted(
+			totalNumberOfLinesCopied,
+			challengeeRepoData,
+			challengeeRepoName,
+		)
+		preliminaryHighlyLikelyRepos = append(preliminaryHighlyLikelyRepos, *result)
+	}
+
+	// sort by combined similarity, descending order
+	sort.Slice(preliminaryHighlyLikelyRepos, func(i, j int) bool {
+		return preliminaryHighlyLikelyRepos[i].CombinedSimilarityWeighted > preliminaryHighlyLikelyRepos[j].CombinedSimilarityWeighted
+	})
+
+	fmt.Println("-----------------------------------")
+	fmt.Println("Preliminary Results")
+	renderTable(repoName, preliminaryHighlyLikelyRepos)
+	fmt.Println("-----------------------------------")
+	// ask user if want to continue advanced repo-to-repo match evaluation
+	fmt.Println("Do you want to continue to advanced repo-to-repo match evaluation? (y/n)")
+	var input string
+	fmt.Scanln(&input)
+	if input != "y" {
+		fmt.Println("Exiting...")
+		os.Exit(0)
+	}
+
+	var highlyLikelyRepos []RepoToRepoHighestLikelihoodScores
+
+	repoEvaluationProgressBar := ProgressModel{
+		progress:    progress.New(progress.WithDefaultGradient()),
+		mainMessage: fmt.Sprintf("Evaluating %d Repositories Found (Max 8)...", len(possibleReposTopN)),
+		length:      len(possibleReposTopN),
+	}
+
+	repoEvaluationProgressBarModel := tea.NewProgram(repoEvaluationProgressBar)
+
+	go func() {
+		// for each repo, clone and compare
+		// dont go routine each due to memory usage
+		countOfDone := 0
+		for _, challengeeRepoName := range possibleReposTopN {
+			repoEvaluationProgressBarModel.Send(updateMessageMsg{message: fmt.Sprintf("Evaluating repo number %d...", countOfDone)})
+			result := cloneAndCompare(challengeeRepoName, allDataArray, allDataMap)
+			if result != nil {
+				highlyLikelyRepos = append(highlyLikelyRepos, *result)
+			}
+			countOfDone++
+			repoEvaluationProgressBarModel.Send(progressMsg{workflowsDone: countOfDone})
+		}
+	}()
+
+	// awaits here
+	if _, err := repoEvaluationProgressBarModel.Run(); err != nil {
+		fmt.Println("Error running progress bar for parsing code:", err)
+		os.Exit(1)
+	}
+
+	// sort by combined similarity, descending order
+	sort.Slice(highlyLikelyRepos, func(i, j int) bool {
+		return highlyLikelyRepos[i].CombinedSimilarityWeighted > highlyLikelyRepos[j].CombinedSimilarityWeighted
+	})
 	renderTable(repoName, highlyLikelyRepos)
 
 }
@@ -319,6 +360,41 @@ func cloneAndCompare(challengeeRepoName string, allDataArray []string, allDataMa
 	for _, matchedChallengeeData := range matchedMap {
 		totalNumberOfLinesCopied += matchedChallengeeData.NumberOfLinesCopied
 	}
+
+	return computeSimilarityScoresWeighted(totalNumberOfLinesCopied, matchedMap, challengeeRepoUrl, challengeeRepoName)
+
+}
+
+func computePreliminarySimilarityScoresWeighted(
+	totalNumberOfLinesCopied int,
+	challengeeRepoData []*MiniParseCodeWorkflowScanResult,
+	challengeeRepoName string,
+) *RepoToRepoHighestLikelihoodScores {
+
+	weightedCombinedSimilarity := 0.0
+	weightedTFIDFSimilarity := 0.0
+	weightedLevenSimilarity := 0.0
+	for _, data := range challengeeRepoData {
+		weight := float64(data.NumberOfLinesCopied) / float64(totalNumberOfLinesCopied)
+		weightedCombinedSimilarity += weight * data.CombinedSimilarity
+		weightedTFIDFSimilarity += weight * data.TFIDFSimilarity
+		weightedLevenSimilarity += weight * data.LevenSimilarity
+	}
+	return &RepoToRepoHighestLikelihoodScores{
+		RepoUrl:                    "https://github.com/" + challengeeRepoName,
+		RepoName:                   challengeeRepoName,
+		TFIDFSimilarityWeighted:    weightedTFIDFSimilarity,
+		LevenSimilarityWeighted:    weightedLevenSimilarity,
+		CombinedSimilarityWeighted: weightedCombinedSimilarity,
+	}
+}
+
+func computeSimilarityScoresWeighted(
+	totalNumberOfLinesCopied int,
+	matchedMap map[string]RepoToRepoMatchedChallengeeData,
+	challengeeRepoUrl string,
+	challengeeRepoName string,
+) *RepoToRepoHighestLikelihoodScores {
 	weightedCombinedSimilarity := 0.0
 	weightedTFIDFSimilarity := 0.0
 	weightedLevenSimilarity := 0.0
@@ -337,12 +413,12 @@ func cloneAndCompare(challengeeRepoName string, allDataArray []string, allDataMa
 	}
 }
 
-func getTopNRepos(possibleRepoMap map[string]int, n int) []string {
+func getTopNRepos(possibleRepoMap map[string][]*MiniParseCodeWorkflowScanResult, n int) []string {
 	// Create a slice of Pairs and populate it from the map
 	possibleRepoPairs := make(util.PairList[int], len(possibleRepoMap))
 	i := 0
 	for k, v := range possibleRepoMap {
-		possibleRepoPairs[i] = util.Pair[int]{Key: k, Value: v}
+		possibleRepoPairs[i] = util.Pair[int]{Key: k, Value: len(v)}
 		i++
 	}
 

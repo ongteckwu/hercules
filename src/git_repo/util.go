@@ -2,6 +2,7 @@ package git_repo
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -12,6 +13,7 @@ import (
 )
 
 func GitClone(url string, directory string) {
+	fmt.Println("Cloning repository " + url)
 	_, err := git.PlainClone(directory, false, &git.CloneOptions{
 		URL: url,
 	})

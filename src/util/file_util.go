@@ -114,7 +114,7 @@ var NON_CODE_EXTENSIONS = []string{
 	// Email files
 	".email", ".eml", ".emlx", ".msg", ".oft", ".ost", ".pst", ".vcf",
 	// Log files
-	".log", ".tlog",
+	".log", ".tlog", ".json",
 }
 
 var NON_CODE_FILES = []string{
