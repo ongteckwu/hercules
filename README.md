@@ -46,7 +46,7 @@ OR
 ./hercules --dir=<path-to-code-directory>
 ```
 
-Note: The application will take some time to run, due to the sheer volume of code to scan, and also to Github API limits.
+Note: The application will take a couple of mins to run, due to the sheer volume of code to scan, and also to Github API limits.
 
 ## How it works
 
