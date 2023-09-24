@@ -14,12 +14,15 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/charmbracelet/bubbles/progress"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/olekukonko/tablewriter"
 
 	"github.com/wilcosheh/tfidf/similarity"
 )
 
-const NO_OF_FILES_FOR_PARSING = 15
+const TEXT_MAX_LENGTH = 25000
+const NO_OF_FILES_FOR_PARSING = 20
 
 type RepoToRepoPotentialChallengeeData struct {
 	path            string
@@ -48,18 +51,21 @@ const LEVEN_SIMILARITY_THRESHOLD = 0.7
 const COMBINED_SIMILARITY_THRESHOLD = 0.45
 const CHOOSE_TOP_N_REPOS = 8
 
-func RunWorkflow(repoDir string, repoName string) {
+func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 	filePaths, err := util.GetFilePaths(repoDir)
 	util.Check(err)
 
 	filePaths = util.RemoveNonCodeFiles(filePaths)
 
 	// read all the files and return a map of path to data
-	allDataMap, err := util.MultipleFileRead(filePaths) // map[path]data
+	allDataMap, err := util.MultipleFileRead(filePaths, TEXT_MAX_LENGTH) // map[path]data
+	// truncated to prevent OOM
 	util.Check(err)
 
 	// create a slice of all the data
 	allDataArray := loadAllData(allDataMap)
+
+	fmt.Printf("Number of files: %d\n", len(allDataArray))
 
 	// create a char level tfidf with the files
 	charLevelTFIDF := tfidf.New()
@@ -77,33 +83,86 @@ func RunWorkflow(repoDir string, repoName string) {
 	possibleRepoMap := make(map[string]int)
 	possibleRepoMapMutex := &sync.Mutex{}
 
+	///////////////////////////////
+	// PARSE FILES TO FIND REPOS //
+	///////////////////////////////
+
+	mainMessage := "Parsing these randomly picked files:\n"
 	for _, path := range randomlyDrawnFilesN {
-		// dont need to goroutine since github has a rate limit
-		MiniParseCodeWorkflow(
-			repoName,
-			path, allDataMap[path],
-			keywordsTFIDF, keywordsTFIDFMutex,
-			charLevelTFIDF, charLevelTFIDFMutex,
-			possibleRepoMap, possibleRepoMapMutex,
-		)
+		mainMessage += fmt.Sprintf("    - %s\n", path)
 	}
+
+	fileSearchProgressBar := ProgressModel{
+		progress:    progress.New(progress.WithDefaultGradient()),
+		mainMessage: mainMessage,
+		length:      len(randomlyDrawnFilesN),
+	}
+
+	fileSearchProgressBarModel := tea.NewProgram(fileSearchProgressBar)
+
+	go func() {
+		countOfDone := 0
+		for _, path := range randomlyDrawnFilesN {
+			// dont need to goroutine since github has a rate limit
+			ParseCodeWorkflow(
+				repoName,
+				path, isTempDir, allDataMap[path],
+				keywordsTFIDF, keywordsTFIDFMutex,
+				charLevelTFIDF, charLevelTFIDFMutex,
+				possibleRepoMap, possibleRepoMapMutex,
+			)
+			countOfDone++
+			fileSearchProgressBarModel.Send(progressMsg{workflowsDone: countOfDone})
+			fileSearchProgressBarModel.Send(updateMessageMsg{message: fmt.Sprintf("Parsing %s... (Might slow down due to Github API Rate Limit)", path)})
+		}
+	}()
+
+	if _, err := fileSearchProgressBarModel.Run(); err != nil {
+		fmt.Println("Error running progress bar for parsing code:", err)
+		os.Exit(1)
+	}
+
+	///////////////////////////
+	// EVALUATE REPOSITORIES //
+	///////////////////////////
 
 	possibleReposTopN := getTopNRepos(possibleRepoMap, CHOOSE_TOP_N_REPOS)
 
 	var highlyLikelyRepos []RepoToRepoHighestLikelihoodScores
 
-	// for each repo, clone and compare
-	// dont go routine each due to memory usage
-	for _, challengeeRepoName := range possibleReposTopN {
-		result := cloneAndCompare(challengeeRepoName, allDataArray, allDataMap)
-		if result != nil {
-			highlyLikelyRepos = append(highlyLikelyRepos, *result)
+	if len(possibleReposTopN) > 0 {
+		repoEvaluationProgressBar := ProgressModel{
+			progress:    progress.New(progress.WithDefaultGradient()),
+			mainMessage: fmt.Sprintf("Evaluating %d Repositories Found (Max 8)...", len(possibleReposTopN)),
+			length:      len(possibleReposTopN),
+		}
+
+		repoEvaluationProgressBarModel := tea.NewProgram(repoEvaluationProgressBar)
+
+		go func() {
+			// for each repo, clone and compare
+			// dont go routine each due to memory usage
+			countOfDone := 0
+			for _, challengeeRepoName := range possibleReposTopN {
+				repoEvaluationProgressBarModel.Send(updateMessageMsg{message: fmt.Sprintf("Evaluating repo number %d...", countOfDone)})
+				result := cloneAndCompare(challengeeRepoName, allDataArray, allDataMap)
+				if result != nil {
+					highlyLikelyRepos = append(highlyLikelyRepos, *result)
+				}
+				countOfDone++
+				repoEvaluationProgressBarModel.Send(progressMsg{workflowsDone: countOfDone})
+			}
+		}()
+
+		// sort by combined similarity, descending order
+		sort.Slice(highlyLikelyRepos, func(i, j int) bool {
+			return highlyLikelyRepos[i].CombinedSimilarityWeighted > highlyLikelyRepos[j].CombinedSimilarityWeighted
+		})
+		if _, err := repoEvaluationProgressBarModel.Run(); err != nil {
+			fmt.Println("Error running progress bar for parsing code:", err)
+			os.Exit(1)
 		}
 	}
-	// sort by combined similarity, descending order
-	sort.Slice(highlyLikelyRepos, func(i, j int) bool {
-		return highlyLikelyRepos[i].CombinedSimilarityWeighted > highlyLikelyRepos[j].CombinedSimilarityWeighted
-	})
 
 	renderTable(repoName, highlyLikelyRepos)
 
@@ -112,7 +171,7 @@ func RunWorkflow(repoDir string, repoName string) {
 func renderTable(repoName string, highlyLikelyRepos []RepoToRepoHighestLikelihoodScores) {
 	fmt.Println("-----------------------------------")
 	fmt.Println("Repository to compare: " + repoName)
-	fmt.Printf("Top %d Repositories\n", CHOOSE_TOP_N_REPOS)
+	fmt.Printf("Top %d Repositories\n", len(highlyLikelyRepos))
 	fmt.Println("If any of the values are green, then the repo to compare is likely a copy of the repo in question.")
 
 	table := tablewriter.NewWriter(os.Stdout)
@@ -183,7 +242,8 @@ func cloneAndCompare(challengeeRepoName string, allDataArray []string, allDataMa
 	filePaths = util.RemoveNonCodeFiles(filePaths)
 
 	// read all the files and return a map of path to data
-	challengeeAllDataMap, err := util.MultipleFileRead(filePaths) // map[path]data
+	challengeeAllDataMap, err := util.MultipleFileRead(filePaths, TEXT_MAX_LENGTH) // map[path]data
+	// truncated to prevent OOM
 	util.Check(err)
 
 	// create a slice of all the data
@@ -212,7 +272,7 @@ func cloneAndCompare(challengeeRepoName string, allDataArray []string, allDataMa
 				tempMemory[challengeePath] = w2
 			}
 			similarity := similarity.Cosine(w1, w2)
-			if similarity > 0.6 {
+			if similarity > 0.6 { // just need an entry point, since 0.5 is lowest
 				obj := RepoToRepoPotentialChallengeeData{
 					path:            challengeePath,
 					data:            challengeeData,

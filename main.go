@@ -1,7 +1,7 @@
 package main
 
 import (
-	"hercules/src/workflow"
+	"hercules/src/arg_parser"
 	"log"
 
 	"github.com/joho/godotenv"
@@ -16,5 +16,5 @@ func initialize() {
 
 func main() {
 	initialize()
-	workflow.RunGitCloneWorkflow("https://github.com/ashutoshji/online-store")
+	arg_parser.ArgParser()
 }

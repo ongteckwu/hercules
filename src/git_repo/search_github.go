@@ -50,7 +50,6 @@ func SearchGitHub(query string, numberOfQueries int) (GitHubSearchResult, error)
 		if resp.StatusCode == 403 {
 			// If you hit API rate limit, implement backoff
 			wait := time.Duration(10) * time.Second
-			fmt.Printf("Hit rate limit. Retrying in %v seconds...\n", wait.Seconds())
 			time.Sleep(wait)
 			continue
 		}

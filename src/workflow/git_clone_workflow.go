@@ -36,6 +36,6 @@ func RunGitCloneWorkflow(repoUrl string) error {
 	if err != nil {
 		return fmt.Errorf("error getting repo name from URL: %v", err)
 	}
-	RunWorkflow(dir, repoName)
+	RunWorkflow(dir, repoName, true)
 	return nil
 }

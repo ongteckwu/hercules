@@ -49,7 +49,8 @@ type fileNameAndData struct {
 
 // MultipleFileRead reads multiple files concurrently
 // and returns a map of file names to file contents
-func MultipleFileRead(fileNames []string) (map[string]string, error) {
+// truncated to characterMaxLength characters.
+func MultipleFileRead(fileNames []string, characterMaxLength int) (map[string]string, error) {
 	var wg sync.WaitGroup
 
 	numberOfFiles := len(fileNames)
@@ -64,9 +65,10 @@ func MultipleFileRead(fileNames []string) (map[string]string, error) {
 			errChannel <- err
 			return
 		}
+		strData := string(data)
 		out := fileNameAndData{
 			fileName: filename,
-			data:     string(data),
+			data:     strData[:Min(characterMaxLength, len(strData))],
 		}
 		dataChannel <- out
 	}

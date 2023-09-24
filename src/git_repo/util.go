@@ -57,3 +57,18 @@ func GetRepoNameFromUrl(repoUrl string) (string, error) {
 
 	return repoDir, nil
 }
+
+func IsValidGitHubURL(testURL string) bool {
+	parsedURL, err := url.Parse(testURL)
+
+	// Check for errors, ensure it's HTTP/HTTPS, and the host is github.com
+	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" ||
+		(parsedURL.Scheme != "http" && parsedURL.Scheme != "https") ||
+		parsedURL.Host != "github.com" {
+		return false
+	}
+
+	// Further check: GitHub URLs usually have a path like "/user/repo"
+	parts := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
+	return len(parts) >= 2
+}

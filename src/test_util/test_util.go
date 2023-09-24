@@ -8,7 +8,7 @@ import (
 )
 
 func TestComparison(path1 string, path2 string) {
-	data, err := util.MultipleFileRead([]string{path1, path2})
+	data, err := util.MultipleFileRead([]string{path1, path2}, 1000000)
 	util.Check(err)
 	text1 := data[path1]
 	text2 := data[path2]
