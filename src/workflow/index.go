@@ -117,6 +117,7 @@ func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 		}
 	}()
 
+	// awaits here
 	if _, err := fileSearchProgressBarModel.Run(); err != nil {
 		fmt.Println("Error running progress bar for parsing code:", err)
 		os.Exit(1)
@@ -154,14 +155,16 @@ func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 			}
 		}()
 
-		// sort by combined similarity, descending order
-		sort.Slice(highlyLikelyRepos, func(i, j int) bool {
-			return highlyLikelyRepos[i].CombinedSimilarityWeighted > highlyLikelyRepos[j].CombinedSimilarityWeighted
-		})
+		// awaits here
 		if _, err := repoEvaluationProgressBarModel.Run(); err != nil {
 			fmt.Println("Error running progress bar for parsing code:", err)
 			os.Exit(1)
 		}
+
+		// sort by combined similarity, descending order
+		sort.Slice(highlyLikelyRepos, func(i, j int) bool {
+			return highlyLikelyRepos[i].CombinedSimilarityWeighted > highlyLikelyRepos[j].CombinedSimilarityWeighted
+		})
 	}
 
 	renderTable(repoName, highlyLikelyRepos)
