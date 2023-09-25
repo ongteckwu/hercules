@@ -38,50 +38,36 @@ Note: The application will take a couple of mins to run, due to the sheer volume
 
 ## How it works
 
-### Initialize
 
 1️⃣ Randomly picks N=15 code files from the assignment (ignores files that aren't code and folders).
 
-### Keywords Search
 2️⃣ Next, it uses token-level TFIDF to identify key terms in the code. 
 
 These terms are used to search GitHub for similar code files. 
 
-The top 10 best matched Github files are pulled per assignment code file. 🕵️‍♂️
-
-### Similarity Metrics
+The top 10 best matched Github files are pulled per assignment code file. 
 
 3️⃣ Next, it applies two different methods, Double-side Argmin Levenshtein (DAL) and Char-level non-alphabet TFIDF (CLNAT), to see how similar the assignment code file is to the GitHub code files. 🔍 
 
-#### Double-side Argmin Levenshtein (DAL)
-A form of Levenshtein that is used to find the most similar substring of string 1 in another string 2 (argmin). 
+**DAL:** A form of Levenshtein that is used to find the most similar substring of string 1 in another string 2 (argmin). 
 It returns:
 1. the substring correction count (the min) and
 2. the index of where the substring ends (the argmin).
+* Using it on the reverse of string 1 and string 2 gives the index of where the substring starts (double-sided).
+* The similarity score is `score = 1 - min/(sub_string_char_count)`
 
-Using it on the reverse of string 1 and string 2 gives the index of where the substring starts (double-sided).
-
-The similarity score is `score = 1 - min/(sub_string_char_count)`
-
-#### Char-level non-alphabet TFIDF
-This is TFIDF but on a character level. It ignores alphabets so that it is variable-name-change invariant.
-
-### Repo-to-repo match
+**CLNAT:** This is TFIDF but on a character level. It ignores alphabets so that it is variable-name-change invariant.
 
 4️⃣ It then counts the number of Github repositories that have similar code files. 
 
 Then, it picks the top M=8 similar repositories and compares them directly to the assignment using both DAL and CLNAT. 
 
-This results in three scores: summed weighted DAL, summed weighted CLNAT, and a weighted Combined Similarity. 📊
+This results in three scores: summed weighted DAL, summed weighted CLNAT, and a weighted Combined Similarity.
 
-#### Weighted
-Weighted by character count e.g. `sum(character_count[i]/total_character_count * similarity_score[i])`
+* Weighted by character count e.g. `sum(character_count[i]/total_character_count * similarity_score[i])`
+* `combined_similarity_score = dal_score * clnat_score`
 
-#### Combined Similarity Score
-`combined_similarity_score = dal_score * clnat_score`
-
-### Show Results
-5️⃣  Finally, it ranks these GitHub repositories based on the combined similarity score and shows the results in a table. 📝
+5️⃣  Finally, it ranks these GitHub repositories based on the combined similarity score and shows the results in a table.
 
 Note: N and M can be tuned.
 
