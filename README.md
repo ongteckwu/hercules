@@ -3,29 +3,9 @@
   <img src="https://github.com/ongteckwu/hercules/assets/3834724/d12eca5b-ffff-4875-af66-e277be3a3124" />
 </p>
 
-**Hercules is a tool for hiring managers.**
-
-It checks if job applicants have copied their tech assignments from GitHub.
-
-The GOAL? 
-
-To make sure assignments really show how skilled someone is in tech, not just how good their search, copy, and paste skills are 🚫📑.
+**Hercules is a tool for checking code plagiarism in Github.**
 
 It can handle all sorts of changes in the code, and is also variable-name invariant. If there's an X% change, it will be able to tell you that there's a (100-X)% similarity.
-
-## Backstory
-
-I built this tool out of annoyance.
-
-Someone submitted an assignment that looked too well-done for the amount of time given.
-
-My suspicion made me CSI into Github.
-
-Unfortunately for him, it led me to finding the repositories he cloned.
-
-I was annoyed that he cloned a repository for my technical assignment, and vowed to not let this happen to me again.
-
-I decided to build a tool to automate this process, for my own sake, and hopefully for other hiring managers out there.
 
 ## Sample Output
 ![download](https://github.com/ongteckwu/hercules/assets/3834724/b464b537-8c85-4f91-9b6c-ebfe3b020d37)
