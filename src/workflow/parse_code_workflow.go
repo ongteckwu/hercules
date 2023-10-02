@@ -35,7 +35,7 @@ func ParseCodeWorkflow(
 	charLevelTFIDFMutex *sync.Mutex,
 	possibleRepoMap map[string][]*MiniParseCodeWorkflowScanResult,
 	possibleRepoMapMutex *sync.Mutex,
-) error {
+) (int, error) {
 	fileExt := filepath.Ext(path)
 	parsedCodeText := code_parser.ParseCodeText(codeText)
 	keywordsTFIDFMutex.Lock()
@@ -52,8 +52,9 @@ func ParseCodeWorkflow(
 	query := strings.Join(topKeywords, "+") + extQuery
 	queryResults, err := git_repo.SearchGitHub(query, NUMBER_OF_FILES_TO_QUERY)
 	if err != nil {
-		fmt.Printf("Error searching GitHub: %v\n", err)
-		return err
+		errMsg := fmt.Sprintf("Error searching GitHub: %v\n", err)
+		fmt.Println(errMsg[:util.Min(len(errMsg), 100)])
+		return 0, err
 	}
 
 	resultChannel := make(chan *MiniParseCodeWorkflowScanResult, len(queryResults.Items))
@@ -92,7 +93,7 @@ func ParseCodeWorkflow(
 			)
 
 			charLevelTFIDFMutex.Lock()
-			charLevelTFIDF.AddDocs(&[]string{challengeeCodeText})
+			charLevelTFIDF.AddDocs([]string{challengeeCodeText})
 			w1 := charLevelTFIDF.Cal(parsedCodeText.ParsedCodeText)
 			w2 := charLevelTFIDF.Cal(parsedCodeTextToCompare.ParsedCodeText)
 			charLevelTFIDFMutex.Unlock()
@@ -130,5 +131,5 @@ func ParseCodeWorkflow(
 			count++
 		}
 	}
-	return nil
+	return count, nil
 }

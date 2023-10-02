@@ -16,13 +16,13 @@ import (
 
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/olekukonko/tablewriter"
 
 	"github.com/wilcosheh/tfidf/similarity"
 )
 
 const TEXT_MAX_LENGTH = 25000
 const NO_OF_FILES_FOR_PARSING = 18
+const NO_OF_MAX_SEARCHED_FILES_TO_PARSE = 180 // can be set if you want to parse less files
 
 type RepoToRepoPotentialChallengeeData struct {
 	path            string
@@ -41,14 +41,16 @@ type RepoToRepoMatchedChallengeeData struct {
 type RepoToRepoHighestLikelihoodScores struct {
 	RepoUrl                    string
 	RepoName                   string
+	TotalNumberOfFiles         int
+	SimilarNumberOfFiles       int
 	TFIDFSimilarityWeighted    float64
 	LevenSimilarityWeighted    float64
 	CombinedSimilarityWeighted float64
 }
 
-const TFIDF_SIMILARITY_THRESHOLD = 0.8
+const TFIDF_SIMILARITY_THRESHOLD = 0.7
 const LEVEN_SIMILARITY_THRESHOLD = 0.7
-const COMBINED_SIMILARITY_THRESHOLD = 0.45
+const COMBINED_SIMILARITY_THRESHOLD = 0.4
 const CHOOSE_TOP_N_REPOS = 8
 
 func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
@@ -69,15 +71,27 @@ func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 
 	// create a char level tfidf with the files
 	charLevelTFIDF := tfidf.New()
-	charLevelTFIDF.AddDocs(&allDataArray, tfidf.TokenizeCharLevelNoAlpha)
+	charLevelTFIDF.AddDocs(allDataArray, tfidf.TokenizeCharLevelNoAlpha)
 	charLevelTFIDFMutex := &sync.Mutex{}
 
 	// create normal tfidf with the files
 	keywordsTFIDF := tfidf.New()
-	keywordsTFIDF.AddDocs(&allDataArray)
+	keywordsTFIDF.AddDocs(allDataArray)
 	keywordsTFIDFMutex := &sync.Mutex{}
 
-	randomlyDrawnFilesN := util.RandomDrawWithoutReplacement(&filePaths, NO_OF_FILES_FOR_PARSING)
+	// randomly draw half that is code files first
+	codeFilePaths := util.Filter(filePaths, func(path string) bool {
+		return util.IsCodeFile(path)
+	})
+	if len(codeFilePaths) > NO_OF_FILES_FOR_PARSING/2 {
+		codeFilePaths = util.RandomDrawWithoutReplacement(codeFilePaths, NO_OF_FILES_FOR_PARSING/2)
+	}
+	// draw the other half randomly
+	remainingFilePaths := util.Filter(filePaths, func(path string) bool {
+		return !util.Contains(codeFilePaths, path)
+	})
+	randomlyDrawnFilesN := util.RandomDrawWithoutReplacement(remainingFilePaths, NO_OF_FILES_FOR_PARSING-len(codeFilePaths))
+	randomlyDrawnFilesN = append(randomlyDrawnFilesN, codeFilePaths...)
 
 	// for each file, parse
 	possibleRepoMap := make(map[string][]*MiniParseCodeWorkflowScanResult)
@@ -92,6 +106,11 @@ func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 		mainMessage += fmt.Sprintf("    - %s\n", path)
 	}
 
+	totalNumberOfPossibleSearchedFilesToBeParsed := len(randomlyDrawnFilesN) * NUMBER_OF_FILES_TO_QUERY
+	maxNumberOfSearchedFilesToBeParsed := util.Min(
+		totalNumberOfPossibleSearchedFilesToBeParsed,
+		NO_OF_MAX_SEARCHED_FILES_TO_PARSE,
+	)
 	fileSearchProgressBar := ProgressModel{
 		progress:    progress.New(progress.WithDefaultGradient()),
 		mainMessage: mainMessage,
@@ -101,19 +120,28 @@ func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 	fileSearchProgressBarModel := tea.NewProgram(fileSearchProgressBar)
 
 	go func() {
-		countOfDone := 0
+		totalNumberOfFilesParsed := 0
+		count := 0
 		for _, path := range randomlyDrawnFilesN {
 			// dont need to goroutine since github has a rate limit
-			ParseCodeWorkflow(
+			numberOfFilesParsed, _ := ParseCodeWorkflow(
 				repoName,
 				path, isTempDir, allDataMap[path],
 				keywordsTFIDF, keywordsTFIDFMutex,
 				charLevelTFIDF, charLevelTFIDFMutex,
 				possibleRepoMap, possibleRepoMapMutex,
 			)
-			countOfDone++
-			fileSearchProgressBarModel.Send(progressMsg{workflowsDone: countOfDone})
+			count++
+			totalNumberOfFilesParsed = util.Min(totalNumberOfFilesParsed+numberOfFilesParsed, maxNumberOfSearchedFilesToBeParsed)
+			fileSearchProgressBarModel.Send(progressMsg{workflowsDone: count})
 			fileSearchProgressBarModel.Send(updateMessageMsg{message: fmt.Sprintf("Parsing %s... (Might slow down due to Github API Rate Limit)", path)})
+			if totalNumberOfFilesParsed >= maxNumberOfSearchedFilesToBeParsed {
+				break
+			}
+		}
+		if count < len(randomlyDrawnFilesN) {
+			fileSearchProgressBarModel.Send(progressMsg{workflowsDone: len(randomlyDrawnFilesN)})
+			fileSearchProgressBarModel.Send(updateMessageMsg{message: "Parsing complete!"})
 		}
 	}()
 
@@ -148,6 +176,7 @@ func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 			totalNumberOfLinesCopied += data.NumberOfLinesCopied
 		}
 		result := computePreliminarySimilarityScoresWeighted(
+			len(allDataArray),
 			totalNumberOfLinesCopied,
 			challengeeRepoData,
 			challengeeRepoName,
@@ -162,7 +191,7 @@ func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 
 	fmt.Println("-----------------------------------")
 	fmt.Println("Preliminary Results")
-	renderTable(repoName, preliminaryHighlyLikelyRepos)
+	RenderTable(repoName, preliminaryHighlyLikelyRepos)
 	fmt.Println("-----------------------------------")
 	// ask user if want to continue advanced repo-to-repo match evaluation
 	fmt.Println("Do you want to continue to advanced repo-to-repo match evaluation? (y/n)")
@@ -208,46 +237,8 @@ func RunWorkflow(repoDir string, repoName string, isTempDir bool) {
 	sort.Slice(highlyLikelyRepos, func(i, j int) bool {
 		return highlyLikelyRepos[i].CombinedSimilarityWeighted > highlyLikelyRepos[j].CombinedSimilarityWeighted
 	})
-	renderTable(repoName, highlyLikelyRepos)
+	RenderTable(repoName, highlyLikelyRepos)
 
-}
-
-func renderTable(repoName string, highlyLikelyRepos []RepoToRepoHighestLikelihoodScores) {
-	fmt.Println("-----------------------------------")
-	fmt.Println("Repository to compare: " + repoName)
-	fmt.Printf("Top %d Repositories\n", len(highlyLikelyRepos))
-	fmt.Println("If any of the values are green, then the challenged repo is likely a copy of the repo in question.")
-
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Repo URL", "TFIDF Weighted", "Argmin Leven Weighted", "Combined Sim Weighted"})
-
-	for _, repo := range highlyLikelyRepos {
-		tfidfSimilarityColors := tablewriter.Colors{tablewriter.BgBlackColor}
-		if repo.TFIDFSimilarityWeighted > TFIDF_SIMILARITY_THRESHOLD {
-			tfidfSimilarityColors = tablewriter.Colors{tablewriter.FgGreenColor}
-		}
-
-		levenSimilarityColors := tablewriter.Colors{tablewriter.BgBlackColor}
-		if repo.LevenSimilarityWeighted > LEVEN_SIMILARITY_THRESHOLD {
-			levenSimilarityColors = tablewriter.Colors{tablewriter.FgGreenColor}
-		}
-
-		combinedSimilarityColors := tablewriter.Colors{tablewriter.BgBlackColor}
-		if repo.CombinedSimilarityWeighted > COMBINED_SIMILARITY_THRESHOLD {
-			combinedSimilarityColors = tablewriter.Colors{tablewriter.FgGreenColor}
-		}
-
-		row := []string{
-			repo.RepoUrl,
-			fmt.Sprintf("%.4f", repo.TFIDFSimilarityWeighted),
-			fmt.Sprintf("%.4f", repo.LevenSimilarityWeighted),
-			fmt.Sprintf("%.4f", repo.CombinedSimilarityWeighted),
-		}
-
-		table.Rich(row, []tablewriter.Colors{{}, tfidfSimilarityColors, levenSimilarityColors, combinedSimilarityColors})
-	}
-
-	table.Render()
 }
 
 func loadAllData(allDataMap map[string]string) []string {
@@ -300,12 +291,13 @@ func cloneAndCompare(challengeeRepoName string, allDataArray []string, allDataMa
 	}
 	// create a char level tfidf with the files
 	combinedCharLevelTFIDF := tfidf.New()
-	combinedCharLevelTFIDF.AddDocs(&challengeeAllDataArray, tfidf.TokenizeCharLevelNoAlpha)
-	combinedCharLevelTFIDF.AddDocs(&allDataArray, tfidf.TokenizeCharLevelNoAlpha)
+	combinedCharLevelTFIDF.AddDocs(challengeeAllDataArray, tfidf.TokenizeCharLevelNoAlpha)
+	combinedCharLevelTFIDF.AddDocs(allDataArray, tfidf.TokenizeCharLevelNoAlpha)
 
 	matchedMap := make(map[string]RepoToRepoMatchedChallengeeData) // map[challengePath]RepoToRepoMatchedChallengeeData
 	tempMemory := make(map[string](map[string]float64))
 
+	// for each file, find the best challengee file to match with
 	for path, data := range allDataMap {
 		w1 := combinedCharLevelTFIDF.Cal(data)
 		var challengeeArray []RepoToRepoPotentialChallengeeData
@@ -319,13 +311,14 @@ func cloneAndCompare(challengeeRepoName string, allDataArray []string, allDataMa
 				tempMemory[challengeePath] = w2
 			}
 			similarity := similarity.Cosine(w1, w2)
-			if similarity > 0.6 { // just need an entry point, since 0.5 is lowest
+			if similarity > TFIDF_SIMILARITY_THRESHOLD {
 				obj := RepoToRepoPotentialChallengeeData{
 					path:            challengeePath,
 					data:            challengeeData,
 					tfidfSimilarity: similarity,
 				}
 				challengeeArray = append(challengeeArray, obj)
+				break
 			}
 		}
 		if len(challengeeArray) > 0 {
@@ -334,14 +327,17 @@ func cloneAndCompare(challengeeRepoName string, allDataArray []string, allDataMa
 				return challengeeArray[i].tfidfSimilarity > challengeeArray[j].tfidfSimilarity
 			})
 			mostMatchedChallengeeData := challengeeArray[0]
+
 			challengerParsedCodeText := code_parser.ParseCodeText(data)
 			challengeeParsedCodeText := code_parser.ParseCodeText(mostMatchedChallengeeData.data)
+
 			levenSimilarityResults := similarity_compute.ComputeLevenSimilarity(
 				challengerParsedCodeText,
 				challengeeParsedCodeText,
 			)
 
 			combinedSimilarity := levenSimilarityResults.Percentage * mostMatchedChallengeeData.tfidfSimilarity
+
 			matchedMap[path] = RepoToRepoMatchedChallengeeData{
 				NumberOfLinesCopied: levenSimilarityResults.Text1SubstringIndexes.EndIndex -
 					levenSimilarityResults.Text1SubstringIndexes.StartIndex,
@@ -352,7 +348,7 @@ func cloneAndCompare(challengeeRepoName string, allDataArray []string, allDataMa
 			}
 		} // else, no data in matchedMap
 	}
-
+	// free memory
 	tempMemory = nil
 
 	// compute a weighted average score based on NumberOfLinesCopied and CombinedSimilarity
@@ -361,11 +357,15 @@ func cloneAndCompare(challengeeRepoName string, allDataArray []string, allDataMa
 		totalNumberOfLinesCopied += matchedChallengeeData.NumberOfLinesCopied
 	}
 
-	return computeSimilarityScoresWeighted(totalNumberOfLinesCopied, matchedMap, challengeeRepoUrl, challengeeRepoName)
-
+	resultPtr := computeSimilarityScoresWeighted(
+		len(allDataArray), totalNumberOfLinesCopied,
+		matchedMap, challengeeRepoUrl, challengeeRepoName,
+	)
+	return resultPtr
 }
 
 func computePreliminarySimilarityScoresWeighted(
+	totalNumberOfFiles int,
 	totalNumberOfLinesCopied int,
 	challengeeRepoData []*MiniParseCodeWorkflowScanResult,
 	challengeeRepoName string,
@@ -383,6 +383,8 @@ func computePreliminarySimilarityScoresWeighted(
 	return &RepoToRepoHighestLikelihoodScores{
 		RepoUrl:                    "https://github.com/" + challengeeRepoName,
 		RepoName:                   challengeeRepoName,
+		TotalNumberOfFiles:         totalNumberOfFiles,
+		SimilarNumberOfFiles:       len(challengeeRepoData),
 		TFIDFSimilarityWeighted:    weightedTFIDFSimilarity,
 		LevenSimilarityWeighted:    weightedLevenSimilarity,
 		CombinedSimilarityWeighted: weightedCombinedSimilarity,
@@ -390,6 +392,7 @@ func computePreliminarySimilarityScoresWeighted(
 }
 
 func computeSimilarityScoresWeighted(
+	totalNumberOfFiles int,
 	totalNumberOfLinesCopied int,
 	matchedMap map[string]RepoToRepoMatchedChallengeeData,
 	challengeeRepoUrl string,
@@ -407,6 +410,8 @@ func computeSimilarityScoresWeighted(
 	return &RepoToRepoHighestLikelihoodScores{
 		RepoUrl:                    challengeeRepoUrl,
 		RepoName:                   challengeeRepoName,
+		TotalNumberOfFiles:         totalNumberOfFiles,
+		SimilarNumberOfFiles:       len(matchedMap),
 		TFIDFSimilarityWeighted:    weightedTFIDFSimilarity,
 		LevenSimilarityWeighted:    weightedLevenSimilarity,
 		CombinedSimilarityWeighted: weightedCombinedSimilarity,

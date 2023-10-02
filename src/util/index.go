@@ -122,14 +122,14 @@ func Filter[T any](ts []T, f func(T) bool) []T {
 	return us
 }
 
-func RandomDrawWithoutReplacement[T any](arr *[]T, n int) []T {
-	if n > len(*arr) {
-		n = len(*arr)
+func RandomDrawWithoutReplacement[T any](arr []T, n int) []T {
+	if n > len(arr) {
+		n = len(arr)
 	}
 
 	// Create a copy of the original array
-	arrCopy := make([]T, len(*arr))
-	copy(arrCopy, *arr)
+	arrCopy := make([]T, len(arr))
+	copy(arrCopy, arr)
 
 	// Shuffle the array copy
 	rand.Shuffle(len(arrCopy), func(i, j int) { arrCopy[i], arrCopy[j] = arrCopy[j], arrCopy[i] })

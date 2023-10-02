@@ -104,7 +104,7 @@ var NON_CODE_EXTENSIONS = []string{
 	// Data files
 	".csv", ".dat", ".ged", ".key", ".keychain", ".pps", ".ppt", ".pptx", ".sdf", ".tar", ".tax2016", ".tax2019", ".vcf", ".xml",
 	// Executable files
-	".apk", ".app", ".bat", ".cgi", ".com", ".exe", ".gadget", ".jar", ".msi", ".py", ".wsf",
+	".apk", ".app", ".bat", ".cgi", ".com", ".exe", ".gadget", ".jar", ".msi", ".wsf",
 	// Game files
 	".dem", ".gam", ".nes", ".rom", ".sav",
 	// CAD files
@@ -114,7 +114,7 @@ var NON_CODE_EXTENSIONS = []string{
 	// Email files
 	".email", ".eml", ".emlx", ".msg", ".oft", ".ost", ".pst", ".vcf",
 	// Log files
-	".log", ".tlog", ".json",
+	".log", ".tlog",
 }
 
 var NON_CODE_FILES = []string{
@@ -149,6 +149,15 @@ var NON_CODE_FILES = []string{
 	"CHANGELOG", "CHANGELOG.txt", "CHANGELOG.md", "CHANGELOG.html", "CHANGELOG.htm", "CHANGELOG.markdown", "CHANGELOG.mkd", "CHANGELOG.mdwn", "CHANGELOG.mdown", "CHANGELOG.textile", "CHANGELOG.rdoc", "CHANGELOG.org", "CHANGELOG.adoc", "CHANGELOG.asciidoc", "CHANGELOG.rdoc", "CHANGELOG.1ST", "CHANGELOG.mdx", "CHANGELOG.gfm",
 	// contributing files
 	"CONTRIBUTING", "CONTRIBUTING.txt", "CONTRIBUTING.md", "CONTRIBUTING.html", "CONTRIBUTING.htm", "CONTRIBUTING.markdown", "CONTRIBUTING.mkd", "CONTRIBUTING.mdwn", "CONTRIBUTING.mdown", "CONTRIBUTING.textile", "CONTRIBUTING.rdoc", "CONTRIBUTING.org", "CONTRIBUTING.adoc", "CONTRIBUTING.asciidoc", "CONTRIBUTING.rdoc", "CONTRIBUTING.1ST", "CONTRIBUTING.mdx", "CONTRIBUTING.gfm",
+}
+
+var CODE_EXTENSIONS = []string{
+	".c", ".cc", ".cpp", ".cs", ".css", ".go", ".h", ".hpp", ".java", ".js", ".jsx", ".kt", ".m", ".php", ".py", ".rb", ".rs", ".swift", ".ts", ".vue",
+}
+
+func IsCodeFile(filename string) bool {
+	extension := strings.ToLower(filepath.Ext(filename))
+	return Contains(CODE_EXTENSIONS, extension)
 }
 
 func RemoveNonCodeFiles(filenames []string) []string {
